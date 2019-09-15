@@ -130,6 +130,87 @@ class HockeyApp(DistributionSystem):
         return path_to_save
 
 
+class AppCenter(DistributionSystem):
+    """
+    Downloading application from HockeyApp distribution system
+    """
+    url = 'https://api.appcenter.ms/v0.1'
+    download_path = 'downloaded_apps'
+
+    def __init__(self, token, app_name, owner_name, version, id):
+        super().__init__(app_name, version)
+
+        self.id = id
+        self.owner_name = owner_name
+        self.auth_header = {'X-API-Token': token}
+
+    def get_version_info_by_id(self):
+        log.info('AppCenter - Get information about application')
+        url = '{0}/apps/{1}/{2}/releases/{3}'.format(self.url, self.owner_name, self.app_identifier, self.id)
+        response = requests.get(url, headers=self.auth_header)
+        if response.status_code != 200:
+            log.error(
+                'AppCenter - Failed to get information about application release. Request return status code: {0}'.format(
+                    response.status_code))
+            sys.exit(4)
+
+        version_info = response.json()
+        return version_info
+
+    def get_version_info_by_version(self):
+        url = '{0}/apps/{1}/{2}/releases?scope=tester'.format(self.url, self.owner_name, self.app_identifier)
+
+        response = requests.get(url, headers=self.auth_header)
+        if response.status_code != 200:
+            log.error(
+                'AppCenter - Failed to get information about application releases. Request return status code: {0}'.format(
+                    response.status_code))
+            sys.exit(4)
+
+        versions_info = response.json()
+        for version in versions_info:
+            if version['version'] != self.app_version:
+                continue
+
+            self.id = version['id']
+            version_info = self.get_version_info_by_id()
+            return version_info
+
+        return None
+
+    def download_app(self):
+        if self.id:
+            version_info = self.get_version_info_by_id()
+        else:
+            version_info = self.get_version_info_by_version()
+
+        if not version_info:
+            log.error('AppCenter - Failed to get app version information. Verify that you set up arguments correctly and try again')
+
+        log.info('AppCenter - Start download application')
+        download_url = version_info.get('download_url')
+
+        response = requests.get(download_url, headers=self.auth_header, allow_redirects=True)
+        if response.status_code != 200:
+            log.error('AppCenter - Failed to download application. Request return status code: {0}'.format(
+                response.status_code))
+            sys.exit(4)
+
+        file_name = '{0}-{1}.apk'.format(self.app_identifier, version_info['version'])
+        path_to_save = os.path.join(self.download_path, file_name)
+
+        if not os.path.exists(self.download_path):
+            os.mkdir(self.download_path)
+
+        with open(path_to_save, 'wb') as file:
+            file.write(response.content)
+
+        log.info('AppCenter - Download application successfully completed to {0}'.format(path_to_save))
+
+        return path_to_save
+
+
+
 class Bishop:
     """
     Class for interact with Bishop system throw REST API
@@ -284,14 +365,25 @@ class Log:
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Start scan and get scan results from Bishop')
-    parser.add_argument('--distribution_system', type=str, help='Select how to get apk file', choices=['file', 'hockeyapp'], required=True)
+    parser.add_argument('--distribution_system', type=str, help='Select how to get apk file', choices=['file', 'hockeyapp', 'appcenter'], required=True)
 
+    # Arguments used for distribution_system = file
     parser.add_argument('--file_path', type=str, help='Path to local apk file for analyze. This argument required if distribution system set to "file"')
+
+    # Arguments used for distribution_system = hockeyapp
     parser.add_argument('--hockey_token', type=str, help='Auth token for HockeyApp. This argument required if distribution system set to "hockeyapp"')
-    parser.add_argument('--bundle_id', type=str, help='Application bundle in HockeyApp. This argument or "--hockey_app_id" required if distribution system set to "hockeyapp"')
-    parser.add_argument('--public_id', type=str, help='Application identifier in HockeyApp. This argument required if distribution system set to "hockeyapp"')
+    parser.add_argument('--hockey_bundle_id', type=str, help='Application bundle in HockeyApp. This argument or "--hockey_public_id" required if distribution system set to "hockeyapp"')
+    parser.add_argument('--hockey_public_id', type=str, help='Application identifier in HockeyApp. This argument or "--hockey_bundle_id" required if distribution system set to "hockeyapp"')
     parser.add_argument('--hockey_version', type=str, help='Application version in HockeyApp. If not set - the latest version will be downloaded. This argument required if distribution system set to "hockeyapp"', default='latest')
 
+    # Arguments used for distribution_system = appcenter
+    parser.add_argument('--appcenter_token', type=str, help='Auth token for AppCenter. This argument required if distribution system set to "appcenter"')
+    parser.add_argument('--appcenter_owner_name', type=str, help='Application owner name in AppCenter. This argument required if distribution system set to "appcenter"')
+    parser.add_argument('--appcenter_app_name', type=str, help='Application name in AppCenter. This argument required if distribution system set to "appcenter"')
+    parser.add_argument('--appcenter_release_id', type=str, help='Release id in AppCenter. If not set - the latest release will be downloaded. This argument or "--ac_app_version" required if distribution system set to "appcenter"')
+    parser.add_argument('--appcenter_app_version', type=str,help='Application version in AppCenter. This argument  or "--appcenter_release_id" required if distribution system set to "appcenter"')
+
+    # Arguments for Bishop
     parser.add_argument('--bishop_url', type=str, help='Bishop url', required=True)
     parser.add_argument('--token', type=str, help='CI/CD Token for start scan and get results', required=True)
     parser.add_argument('--profile', type=int, help='Project id for scan', required=True)
@@ -303,9 +395,14 @@ def parse_args():
         parser.error('"--distribution_system file" requires "--file_path" argument to be set')
     elif args.distribution_system == 'hockeyapp' and (
             args.hockey_token is None or
-            (args.hockey_app is None or args.hockey_app_id is None)):
+            (args.hockey_bundle_id is None or args.hockey_public_id is None)):
         parser.error('"--distribution_system hockeyapp" requires "--hockey_token" and "--hockey_app" arguments to be set')
-
+    elif args.distribution_system == 'appcenter' and (
+        args.appcenter_token is None or args.appcenter_owner_name is None or args.appcenter_app_name is None or (
+        args.appcenter_release_id is None and args.appcenter_app_version is None)):
+        parser.error(
+            '"--distribution_system appcenter" requires "--appcenter_token", "--appcenter_owner_name",  "--appcenter_app_name" and '
+            '"--appcenter_release_id" or "--appcenter_app_version" arguments to be set')
     return args
 
 
@@ -327,10 +424,17 @@ if __name__ == '__main__':
         apk_file = arguments.file_path
     elif distribution_system == 'hockeyapp':
         hockey_app = HockeyApp(arguments.hockey_token,
-                               arguments.bundle_id,
-                               arguments.public_id,
+                               arguments.hockey_bundle_id,
+                               arguments.hockey_public_id,
                                arguments.hockey_version)
         apk_file = hockey_app.download_app()
+    elif distribution_system == 'appcenter':
+        appcenter = AppCenter(arguments.appcenter_token,
+                              arguments.appcenter_app_name,
+                              arguments.appcenter_owner_name,
+                              arguments.appcenter_app_version,
+                              arguments.appcenter_release_id)
+        apk_file = appcenter.download_app()
 
     bishop = Bishop(bishop_url, bishop_token, apk_file, bishop_profile, bishop_testcase_id)
 
