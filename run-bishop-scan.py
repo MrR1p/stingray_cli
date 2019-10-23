@@ -213,10 +213,10 @@ class AppCenter(DistributionSystem):
 
 class Bishop:
     """
-    Class for interact with Bishop system throw REST API
+    Class for interact with Bishop system through REST API
     """
     def __init__(self, base_url, token, file, profile, testcase):
-        self.report_path = 'bishop_scan_report.json'
+        # self.report_path = 'bishop_scan_report.json'
         self.headers = {'Access-token': token}
         self.url = base_url
         self.apk_file = file
@@ -256,7 +256,7 @@ class Bishop:
 
     def start_scan(self):
         """
-        Start automated scan throw REST API
+        Start automated scan through REST API
         :return: scan info (dict)
         """
         if not os.path.exists(self.apk_file):
@@ -271,7 +271,15 @@ class Bishop:
 
         scan_response = requests.post('{0}/rest/scan/cd'.format(self.url), headers=self.headers, files=multipart_form_data)
 
+        # remove it when the correct responses will be provided by api in that case
+        if scan_response.status_code == 500:
+            log.error('Please check the correctness of the provided testcase id')
+        # remove it when the correct responses will be provided by api in that case
+        if scan_response.status_code == 401:
+            log.error('Please check the correctness of the provided profile id')
+
         scan_object = self._response_json(scan_response)
+
         if scan_response.status_code != 201:
             log.error('Scan start error: {0}'.format(scan_object.get('message', 'N/A')))
             return False
@@ -337,13 +345,17 @@ class Bishop:
             return {}
         return result_object
 
-    def create_report(self, scan_result):
+    def create_report(self, scan_result, type):
         """
         Create json report with data specified
         :param scan_result: data to write as Json report
         :return: None
         """
-        with open(self.report_path, 'w') as f:
+        if type == 'standard' or type == 'grouping':
+            report_name = 'bishop_scan_{0}_report.json'.format(type)
+        else:
+            report_name = 'bishop_scan_report-testcase_{}.json'.format(self.testcase)
+        with open(report_name, 'w') as f:
             f.write(json.dumps(scan_result, indent=4))
 
 
@@ -362,6 +374,14 @@ class Log:
         message = '{time} - {level} {message}'.format(time=current_date, level=level, message=message)
         print(message)
 
+class ValidateReport(argparse.Action):
+    def __call__(self, parser, args, values, option_string=None):
+        valid_types = ('standard', 'separate', 'grouping')
+        reportType = values
+        for i in reportType:
+            if i not in valid_types:
+                raise ValueError('invalid type {0}, supported types are {1}'.format(i, valid_types))
+        setattr(args, self.dest, reportType)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Start scan and get scan results from Bishop')
@@ -387,7 +407,8 @@ def parse_args():
     parser.add_argument('--bishop_url', type=str, help='Bishop url', required=True)
     parser.add_argument('--token', type=str, help='CI/CD Token for start scan and get results', required=True)
     parser.add_argument('--profile', type=int, help='Project id for scan', required=True)
-    parser.add_argument('--testcase', type=int, help='Testcase Id', required=True)
+    parser.add_argument('--testcase', nargs='+', type=int, help='Testcase Id')
+    parser.add_argument('--report', nargs='*', type=str, help='Select which type of report should be created', action=ValidateReport, default=['standard'])
 
     args = parser.parse_args()
 
@@ -405,6 +426,74 @@ def parse_args():
             '"--appcenter_release_id" or "--appcenter_app_version" arguments to be set')
     return args
 
+def join_results(scans, type):
+    '''
+    Get scan results from several tescases and join them in one common result
+    '''
+
+    report = []
+    added = False
+
+    # Grouping of scan results, issues of a same type are joined together, these issues details go to a list
+    if type == 'grouping':
+
+        for scan in scans:
+            for issue in scan:
+
+                if not report:
+                    report.append(scan[0])
+                    continue
+
+                for addedIssue in report:
+
+                    added = False
+                    if issue['name'] == addedIssue['name']:
+
+                        if issue['details'] != addedIssue['details'] and issue['details'] not in addedIssue['details']:
+                            if not isinstance(addedIssue['details'][0], list):
+                                temp=[]
+                                temp.append(addedIssue['details'])
+                                temp.append(issue['details'])
+                                addedIssue['details'] = temp
+                            else:
+                                addedIssue['details'].append(issue['details'])
+
+                        added = True
+                        addedIssue['id'].extend(issue['id'])
+                        if issue['scan_id'][0] not in addedIssue['scan_id']:
+                            addedIssue['scan_id'].extend(issue['scan_id'])
+                        break
+
+                if not added:
+                    report.append(issue)
+    #Standard report, same issues from different testcases are joined to escape duplicates
+    else:
+        for scan in scans:
+
+            if not report:
+                report.extend(scan)
+                continue
+            currReportLen = len(report)
+
+            for issue in scan:
+
+                ind = 0
+                added= False
+
+                for addedIssue in report:
+
+                    ind += 1
+                    if issue['name'] == addedIssue['name'] and issue['details'] == addedIssue['details']:
+                        addedIssue['id'].extend(issue['id'])
+                        if issue['scan_id'][0] not in addedIssue['scan_id']:
+                            addedIssue['scan_id'].extend(issue['scan_id'])
+                        added = True
+                        break
+
+                    if ind == currReportLen and not added:
+                        report.append(issue)
+                        break
+    return(report)
 
 if __name__ == '__main__':
 
@@ -412,12 +501,17 @@ if __name__ == '__main__':
     urllib3.disable_warnings()
 
     arguments = parse_args()
+    results = []
 
     bishop_url = arguments.bishop_url
     bishop_token = arguments.token
     bishop_profile = arguments.profile
-    bishop_testcase_id = arguments.testcase
+    bishop_testcase_set = set(arguments.testcase)
     distribution_system = arguments.distribution_system
+
+    report_types = arguments.report
+    if not report_types:
+        report_types = ['standard']
 
     apk_file = ''
     if distribution_system == 'file':
@@ -436,36 +530,63 @@ if __name__ == '__main__':
                               arguments.appcenter_release_id)
         apk_file = appcenter.download_app()
 
-    bishop = Bishop(bishop_url, bishop_token, apk_file, bishop_profile, bishop_testcase_id)
+    for bishop_testcase_id in bishop_testcase_set:
 
-    log.info('Start automated scan with test case Id: {0}, profile Id: {1} and file: {2}'.format(
-        bishop_testcase_id, bishop_profile, apk_file))
+        if len(bishop_testcase_set) > 1:
+            log.info('Processing testcase {0}'.format(bishop_testcase_id))
+        else:
+            if 'standard' in report_types:
+                report_types.remove('standard')
+            if not report_types:
+                report_types = ['separate']
 
-    scan_id = bishop.start_scan()
+        bishop = Bishop(bishop_url, bishop_token, apk_file, bishop_profile, bishop_testcase_id)
 
-    if not scan_id:
-        log.error('Error when starting scan. Exit with error code 1')
-        sys.exit(1)
+        log.info('Start automated scan with test case Id: {0}, profile Id: {1} and file: {2}'.format(
+            bishop_testcase_id, bishop_profile, apk_file))
 
-    scan_complete = False
-    log.info('Scan successfully started. Monitor scan status')
-    while not scan_complete:
-        log.info('Get scan status')
-        scan_complete = bishop.get_scan_status(scan_id)
-        time.sleep(30)
+        scan_id = bishop.start_scan()
 
-    log.info('Scan complete, trying to get scan result')
-    scan_result = bishop.get_scan_result(scan_id)
-    if not scan_result:
-        sys.exit(4)
+        if not scan_id:
+            log.error('Error when starting scan. Exit with error code 1')
+            sys.exit(1)
 
-    log.info('Scan complete, analysing issues')
-    short_stat = bishop.get_short_stat(scan_id)
-    if not short_stat:
-        sys.exit(5)
-    log.info('Vulnerability details: {0}'.format(short_stat))
+        scan_complete = False
+        log.info('Scan successfully started. Monitor scan status')
+        while not scan_complete:
+            log.info('Get scan status')
+            scan_complete = bishop.get_scan_status(scan_id)
+            time.sleep(30)
 
-    log.info('Creating report...')
-    bishop.create_report(scan_result)
+        log.info('Scan complete, trying to get scan result')
+        scan_result = bishop.get_scan_result(scan_id)
+        if not scan_result:
+            sys.exit(4)
+
+        log.info('Scan complete, analysing issues')
+        short_stat = bishop.get_short_stat(scan_id)
+        if not short_stat:
+            sys.exit(5)
+        log.info('Vulnerability details: {0}'.format(short_stat))
+
+        for i in scan_result:
+            i['id'] = str(bishop_testcase_id) + '-' + str(i['id'])#add testcase to id
+            i['scan_id'] = scan_id
+
+        if 'separate' in report_types:
+            bishop.create_report(scan_result, type)
+            log.info('Creating separate report...')
+
+        for i in scan_result:
+            i['id'] = [i['id']]
+            i['scan_id'] = [i['scan_id']]
+
+        results.append(scan_result)
+
+    for type in report_types:
+        if type == 'standard' or type == 'grouping':
+            common_result = join_results(results, type)
+            log.info('Creating {0} report...'.format(type))
+            bishop.create_report(common_result, type)
 
     log.info('Job completed successfully')
