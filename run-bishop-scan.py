@@ -561,7 +561,7 @@ if __name__ == '__main__':
         log.info('Scan complete, trying to get scan result')
         scan_result = bishop.get_scan_result(scan_id)
         if not scan_result:
-            sys.exit(4)
+            continue
 
         log.info('Scan complete, analysing issues')
         short_stat = bishop.get_short_stat(scan_id)
@@ -589,4 +589,7 @@ if __name__ == '__main__':
             log.info('Creating {0} report...'.format(type))
             bishop.create_report(common_result, type)
 
+    if len(results) == 0:
+        log.info('There is no issue data for the report')
+    
     log.info('Job completed successfully')
