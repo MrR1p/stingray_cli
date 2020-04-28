@@ -211,12 +211,12 @@ class AppCenter(DistributionSystem):
 
 
 
-class Bishop:
+class Stingray:
     """
-    Class for interact with Bishop system through REST API
+    Class for interact with Stingray system through REST API
     """
     def __init__(self, base_url, token, file, profile, testcase):
-        # self.report_path = 'bishop_scan_report.json'
+        # self.report_path = 'stingray_scan_report.json'
         self.headers = {'Access-token': token}
         self.url = base_url
         self.apk_file = file
@@ -225,7 +225,7 @@ class Bishop:
 
     def get(self, url):
         """
-        Get method for Bishop REST API.
+        Get method for Stingray REST API.
         Made 3 attempts before fail the script
         :param url: url to get
         :return: response
@@ -352,9 +352,9 @@ class Bishop:
         :return: None
         """
         if type == 'standard' or type == 'grouping':
-            report_name = 'bishop_scan_{0}_report.json'.format(type)
+            report_name = 'stingray_scan_{0}_report.json'.format(type)
         else:
-            report_name = 'bishop_scan_report-testcase_{}.json'.format(self.testcase)
+            report_name = 'stingray_scan_report-testcase_{}.json'.format(self.testcase)
         with open(report_name, 'w') as f:
             f.write(json.dumps(scan_result, indent=4))
 
@@ -384,7 +384,7 @@ class ValidateReport(argparse.Action):
         setattr(args, self.dest, reportType)
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Start scan and get scan results from Bishop')
+    parser = argparse.ArgumentParser(description='Start scan and get scan results from Stingray')
     parser.add_argument('--distribution_system', type=str, help='Select how to get apk file', choices=['file', 'hockeyapp', 'appcenter'], required=True)
 
     # Arguments used for distribution_system = file
@@ -403,8 +403,8 @@ def parse_args():
     parser.add_argument('--appcenter_release_id', type=str, help='Release id in AppCenter. If not set - the latest release will be downloaded. This argument or "--ac_app_version" required if distribution system set to "appcenter"')
     parser.add_argument('--appcenter_app_version', type=str,help='Application version in AppCenter. This argument  or "--appcenter_release_id" required if distribution system set to "appcenter"')
 
-    # Arguments for Bishop
-    parser.add_argument('--bishop_url', type=str, help='Bishop url', required=True)
+    # Arguments for Stingray
+    parser.add_argument('--stingray_url', type=str, help='Stingray url', required=True)
     parser.add_argument('--token', type=str, help='CI/CD Token for start scan and get results', required=True)
     parser.add_argument('--profile', type=int, help='Project id for scan', required=True)
     parser.add_argument('--testcase', nargs='+', type=int, help='Testcase Id')
@@ -503,10 +503,10 @@ if __name__ == '__main__':
     arguments = parse_args()
     results = []
 
-    bishop_url = arguments.bishop_url
-    bishop_token = arguments.token
-    bishop_profile = arguments.profile
-    bishop_testcase_set = set(arguments.testcase)
+    stingray_url = arguments.stingray_url
+    stingray_token = arguments.token
+    stingray_profile = arguments.profile
+    stingray_testcase_set = set(arguments.testcase)
     distribution_system = arguments.distribution_system
 
     report_types = arguments.report
@@ -530,22 +530,22 @@ if __name__ == '__main__':
                               arguments.appcenter_release_id)
         apk_file = appcenter.download_app()
 
-    for bishop_testcase_id in bishop_testcase_set:
+    for stingray_testcase_id in stingray_testcase_set:
 
-        if len(bishop_testcase_set) > 1:
-            log.info('Processing testcase {0}'.format(bishop_testcase_id))
+        if len(stingray_testcase_set) > 1:
+            log.info('Processing testcase {0}'.format(stingray_testcase_id))
         else:
             if 'standard' in report_types:
                 report_types.remove('standard')
             if not report_types:
                 report_types = ['separate']
 
-        bishop = Bishop(bishop_url, bishop_token, apk_file, bishop_profile, bishop_testcase_id)
+        stingray = Stingray(stingray_url, stingray_token, apk_file, stingray_profile, stingray_testcase_id)
 
         log.info('Start automated scan with test case Id: {0}, profile Id: {1} and file: {2}'.format(
-            bishop_testcase_id, bishop_profile, apk_file))
+            stingray_testcase_id, stingray_profile, apk_file))
 
-        scan_id = bishop.start_scan()
+        scan_id = stingray.start_scan()
 
         if not scan_id:
             log.error('Error when starting scan. Exit with error code 1')
@@ -555,26 +555,26 @@ if __name__ == '__main__':
         log.info('Scan successfully started. Monitor scan status')
         while not scan_complete:
             log.info('Get scan status')
-            scan_complete = bishop.get_scan_status(scan_id)
+            scan_complete = stingray.get_scan_status(scan_id)
             time.sleep(30)
 
         log.info('Scan complete, trying to get scan result')
-        scan_result = bishop.get_scan_result(scan_id)
+        scan_result = stingray.get_scan_result(scan_id)
         if not scan_result:
             continue
 
         log.info('Scan complete, analysing issues')
-        short_stat = bishop.get_short_stat(scan_id)
+        short_stat = stingray.get_short_stat(scan_id)
         if not short_stat:
             sys.exit(5)
         log.info('Vulnerability details: {0}'.format(short_stat))
 
         for i in scan_result:
-            i['id'] = str(bishop_testcase_id) + '-' + str(i['id'])#add testcase to id
+            i['id'] = str(stingray_testcase_id) + '-' + str(i['id'])#add testcase to id
             i['scan_id'] = scan_id
 
         if 'separate' in report_types:
-            bishop.create_report(scan_result, type)
+            stingray.create_report(scan_result, type)
             log.info('Creating separate report...')
 
         for i in scan_result:
@@ -587,7 +587,7 @@ if __name__ == '__main__':
         if type == 'standard' or type == 'grouping':
             common_result = join_results(results, type)
             log.info('Creating {0} report...'.format(type))
-            bishop.create_report(common_result, type)
+            stingray.create_report(common_result, type)
 
     if len(results) == 0:
         log.info('There is no issue data for the report')
