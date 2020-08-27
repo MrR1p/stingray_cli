@@ -409,6 +409,7 @@ def parse_args():
     parser.add_argument('--profile', type=int, help='Project id for scan', required=True)
     parser.add_argument('--testcase', nargs='+', type=int, help='Testcase Id')
     parser.add_argument('--report', nargs='*', type=str, help='Select which type of report should be created', action=ValidateReport, default=['standard'])
+    parser.add_argument('--nowait', '-nw', action='store_true', help='Wait before scan ends and get results if set to True. If set to False - just start scan and exit')
 
     args = parser.parse_args()
 
@@ -508,6 +509,7 @@ if __name__ == '__main__':
     stingray_profile = arguments.profile
     stingray_testcase_set = set(arguments.testcase)
     distribution_system = arguments.distribution_system
+    not_wait_scan_end = arguments.nowait
 
     report_types = arguments.report
     if not report_types:
@@ -550,6 +552,10 @@ if __name__ == '__main__':
         if not scan_id:
             log.error('Error when starting scan. Exit with error code 1')
             sys.exit(1)
+
+        if not_wait_scan_end:
+            log.info('Scan successfully started. Don`t wait for end, exit with zero code')
+            sys.exit(0)
 
         scan_complete = False
         log.info('Scan successfully started. Monitor scan status')
