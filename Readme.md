@@ -1,5 +1,5 @@
 # Stingray CI/CD Python script
-*Автоматизируйте анализ безопасности мобильных Android приложений при помощи системы [Stingray](https://stingray.appsec.global/).*
+*Автоматизируйте анализ безопасности мобильных Android приложений при помощи системы [Stingray](https://stingray-mobile.ru/).*
 
 Данный скрипт предназначен для встраивания анализа безопасности мобильных приложений в непрерывный процесс разработки (CI/CD).
 В процессе выполнения скрипта приложение отправляется в систему Stingray для анализа. На выходе формируется json файл с подробными результатами.
@@ -13,19 +13,13 @@
 ## Параметры запуска
 Параметры запуска зависят от расположения файла apk, отправляемого на анализ. Так же, существуют обязательные параметры, которые необходимо указывать при любом виде запуска:
  * `stingray_url` - сетевой адрес Stingray (путь до корня без последнего `/`), при использовании cloud версии - `https://saas.mobile.appsec.world`
+ * `company_id` - идентификатор компании в рамках которой будет осуществлено сканирование
+ * `architecture_id` - идентификатор архитектуры операционной системы, на которой будет произведено сканирование
  * `profile` - id профиля для которого проводится анализ
  * `testcase` - id testcase, который будет воспроизведен во время анализа; возможен запуск нескольких тесткейсов, для этого их id перечисляются через пробел
  * `token` - CI/CD токен для доступа (как его получить можно посмотреть в документации)
  * `distribution_system` - способ загрузки приложения, возможные опции: `file` и `hockeyapp`. Более подробно про них описано ниже в соответствующих разделах
  * `nowait` - опциональный параметр, определяющий необходимость ожидания завершения сканирования. Если данный флаг установлен - скрипт не будет дожидаться завершения сканирования, а выйдет сразу же после запуска. Если флаг не стоит - скрипт будет ожидать завершения процесса анализа и формировать отчет.
-
-Опциональные параметры:
- * `report` - тип отчета, который будет сформирован по результатам проведенного анализа. Возможные опции:
-    * `separate` - одиночный отчет по проведенному сканированию, является отчетом по умолчанию при указании одного testcase id, при несколький testcase id создаст отдельный отчет для каждого запуска
-    * `standard` - отчет по умолчанию при указании нескольких testcase id, совмещает дубликаты дефектов из нескольких сканирований в один (id сохраняются)
-    * `grouping` - отчет, группирующий дефекты одного типа с указанием всех деталей.
-
- Можно указывать сразу несколько опций для создания отчетов нужных типов, например: `-- report separate grouping standard`. Для сканирований с одним тесткейсом возможно создание отдельных и группирующих отчетов.
 
 ### Локальный запуск
 Данный вид запуска подразумевает, что apk файл приложения для анализа располагается локально, рядом (на одной системе) со скриптом.
@@ -54,7 +48,7 @@
 Для запуска анализа локального файла:
 
 ```
-python3.6 run-stingray-scan.py --distribution_system file --file_path "/stingray/demo/apk/swordfish-demo.apk" --stingray_url "https://saas.mobile.appsec.world" --profile 1 --testcase 4 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
+python3.6 run-stingray-scan.py --distribution_system file --file_path "/stingray/demo/apk/swordfish-demo.apk" --stingray_url "https://saas.mobile.appsec.world" --profile 1 --testcase 4 --company_id 1 --architecture_id 1 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
 ```
 
 В результате будет запущен автоматизированный анализ приложения `swordfish-demo.apk` с профилем с `id` 1 и будет запущен тест кейс с `id` 4.
@@ -63,7 +57,7 @@ python3.6 run-stingray-scan.py --distribution_system file --file_path "/stingray
 Для запуска анализа приложения из системы HockeyApp:
 
 ```
-python3.6 run-stingray-scan.py --distribution_system hockeyapp --hockey_token 18bc81146d374ba4b1182ed65e0b3aaa --bundle_id com.swordfishsecurity.demo --hockey_version 31337 --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
+python3.6 run-stingray-scan.py --distribution_system hockeyapp --hockey_token 18bc81146d374ba4b1182ed65e0b3aaa --bundle_id com.swordfishsecurity.demo --hockey_version 31337 --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --company_id 1 --architecture_id 1 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
 ```
 
 В результате в системе HockeyApp будет найдено приложение с идентификатором пакета `com.swordfishsecurity.demo` и версией `31337`. Он будет скачен и для него будет проведен автоматизированный анализ с профилем с `id` 2 и будет запущен тест-кейс с `id` 3.
@@ -72,7 +66,7 @@ python3.6 run-stingray-scan.py --distribution_system hockeyapp --hockey_token 18
 Для запуска анализа последней версии приложения из системы HockeyApp по его публичному идентификатору:
 
 ```
-python3.6 run-stingray-scan.py --distribution_system hockeyapp --hockey_token 18bc81146d374ba4b1182ed65e0b3aaa --public_id "1234567890abcdef1234567890abcdef" --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
+python3.6 run-stingray-scan.py --distribution_system hockeyapp --hockey_token 18bc81146d374ba4b1182ed65e0b3aaa --public_id "1234567890abcdef1234567890abcdef" --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --company_id 1 --architecture_id 1 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
 ```
 
 В результате в системе HockeyApp будет найдено приложение с уникальным публичным идентификатором `1234567890abcdef1234567890abcdef` и последней доступной версией. Файл приложения будет скачен и для него будет проведен автоматизированный анализ с профилем с `id` 2 и будет запущен тест-кейс с `id` 3.
@@ -81,7 +75,7 @@ python3.6 run-stingray-scan.py --distribution_system hockeyapp --hockey_token 18
 Для запуска анализа приложения по известному имени, владельцу и ID релиза необходимо выполнить следующую команду:
 
 ```
-python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token 18bc81146d374ba4b1182ed65e0b3aaa --appcenter_owner_name yshabalin_test_org_or_user --appcenter_app_name Swordfish_debug_version_of_test --appcenter_release_id 710 --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
+python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token 18bc81146d374ba4b1182ed65e0b3aaa --appcenter_owner_name yshabalin_test_org_or_user --appcenter_app_name Swordfish_debug_version_of_test --appcenter_release_id 710 --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --company_id 1 --architecture_id 1 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
 ```
 
 В результате у владельца (пользователя или организации `yshabalin_test_org_or_user`) будет найдено приложение `Swordfish_debug_version_of_test` с ID релиза `710`. Данная версия релиза будет загружена и передана на анализ безопасности в Stingray
@@ -89,7 +83,7 @@ python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token
 Для загрузки релиза с последней версией необходимо параметр `appcenter_release_id latest`. Тогда команда будет выглядеть следующим образом:
 
 ```
-python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token 18bc81146d374ba4b1182ed65e0b3aaa --appcenter_owner_name "yshabalin_test_org_or_user" --appcenter_app_name "Swordfish_debug_version_of_test" --appcenter_release_id latest --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
+python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token 18bc81146d374ba4b1182ed65e0b3aaa --appcenter_owner_name "yshabalin_test_org_or_user" --appcenter_app_name "Swordfish_debug_version_of_test" --appcenter_release_id latest --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --company_id 1 --architecture_id 1 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
 ```
 
 и загружен последний доступный релиз для данного приложения.
@@ -98,7 +92,7 @@ python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token
 Для запуска анализа приложения по известному имени, владельцу и версии приложения (`version_code` в `Android Manifest`) необходимо выполнить следующую команду:
 
 ```
-python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token 18bc81146d374ba4b1182ed65e0b3aaa --appcenter_owner_name "yshabalin_test_org_or_user" --appcenter_app_name "Swordfish_debug_version_of_test" --appcenter_app_version 31337 --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
+python3.6 run-stingray-scan.py --distribution_system appcenter --appcenter_token 18bc81146d374ba4b1182ed65e0b3aaa --appcenter_owner_name "yshabalin_test_org_or_user" --appcenter_app_name "Swordfish_debug_version_of_test" --appcenter_app_version 31337 --stingray_url "https://saas.mobile.appsec.world" --profile 2 --testcase 3 --company_id 1 --architecture_id 1 --token "eyJ0eXA4OiJKA1QiLbJhcGciO5JIU4I1NiJ1.eyJzdaJqZWNcX2lkIj53LCJle5AiOjf1OTM5OTU3MjB1.hfI6c4VN_U2mo5VfRoENPvJCvpxhLzjHqI0gxqgr2Bs"
 ```
 
 В результате у владельца (пользователя или организации `yshabalin_test_org_or_user`) будет найдено приложение `Swordfish_debug_version_of_test` и найден релиз, в котором была указана версия приложения `31337`. Данная версия релиза будет загружена и передана на анализ безопасности в Stingray.
