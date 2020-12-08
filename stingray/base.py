@@ -7,7 +7,8 @@ class StingrayBase:
     def __init__(self, base_url):
         self.headers = {}
         self.current_context = {}
-        self.url = base_url
+        base_url = base_url[:-1] if base_url.endswith('/') else base_url
+        self.url = base_url if base_url.endswith('rest') else f'{base_url}/rest'
 
     def get_current_user_info(self):
         current_user_info_resp = requests.get(f'{self.url}/currentuser/', headers=self.headers)
