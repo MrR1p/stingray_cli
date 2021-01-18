@@ -1,8 +1,8 @@
 import requests
 import sys
 import os
-from helpers.logging import Log
-from distribution_systems.base import DistributionSystem
+from ..helpers.logging import Log
+from .base import DistributionSystem
 
 class AppCenter(DistributionSystem):
     """
