@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument('--token', type=str, help='CI/CD Token for start scan and get results', required=True)
     parser.add_argument('--profile', type=int, help='Project id for scan', required=True)
     parser.add_argument('--testcase', type=int, help='Testcase Id')
-    parser.add_argument('--report_json_file_name', type=int, help='Name for the json file with results in structured format')
+    parser.add_argument('--report_json_file_name', type=str,  help='Name for the json file with results in structured format')
     parser.add_argument('--nowait', '-nw', action='store_true', help='Wait before scan ends and get results if set to True. If set to False - just start scan and exit')
 
     args = parser.parse_args()
