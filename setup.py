@@ -16,7 +16,7 @@ setup(
     include_package_data=True,
     install_requires=[
          'requests > 2.20',
-         'stingray_cli_core == 2.1.3'
+         'stingray_cli_core == 2.1.4'
     ],
     entry_points ={
             'console_scripts': [

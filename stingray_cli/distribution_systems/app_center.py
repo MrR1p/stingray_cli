@@ -1,8 +1,13 @@
 import requests
 import sys
 import os
-from ..helpers.logging import Log
-from .base import DistributionSystem
+
+try:
+    from ..helpers.logging import Log
+    from .base import DistributionSystem
+except ImportError:
+    from stingray_cli.helpers.logging import Log
+    from stingray_cli.distribution_systems.base import DistributionSystem
 
 class AppCenter(DistributionSystem):
     """

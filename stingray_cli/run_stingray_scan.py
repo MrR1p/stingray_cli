@@ -4,11 +4,17 @@ import json
 import urllib3
 import argparse
 
-from .helpers.const import *
-from .helpers.logging import Log
-from .distribution_systems.hockey_app import HockeyApp
-from .distribution_systems.app_center import AppCenter
 from stingray_cli_core import StingrayToken as Stingray
+try:
+    from .helpers.const import *
+    from .helpers.logging import Log
+    from .distribution_systems.hockey_app import HockeyApp
+    from .distribution_systems.app_center import AppCenter
+except ImportError:
+    from stingray_cli.helpers.const import *
+    from stingray_cli.helpers.logging import Log
+    from stingray_cli.distribution_systems.hockey_app import HockeyApp
+    from stingray_cli.distribution_systems.app_center import AppCenter
 
 
 
@@ -34,13 +40,12 @@ def parse_args():
 
     # Arguments for Stingray
     parser.add_argument('--stingray_url', type=str, help='Stingray url', required=True)
-    parser.add_argument('--company_id', type=str, help='Company id for starting scan', required=True)
-    parser.add_argument('--architecture_id', type=str, help='Architecture id to perform scan', required=True)
-    parser.add_argument('--architecture_type', type=str, help='Architecture type (Android or iOS) to perform scan', required=True)
+    parser.add_argument('--company_id', type=int, help='Company id for starting scan', required=True)
+    parser.add_argument('--architecture_id', type=int, help='Architecture id to perform scan', required=True)
     parser.add_argument('--token', type=str, help='CI/CD Token for start scan and get results', required=True)
-    parser.add_argument('--profile', type=int, help='Project id for scan', required=True)
-    parser.add_argument('--testcase', type=int, help='Testcase Id')
-    parser.add_argument('--report_json_file_name', type=str,  help='Name for the json file with results in structured format')
+    parser.add_argument('--profile_id', type=int, help='Project id for scan', required=True)
+    parser.add_argument('--testcase_id', type=int, help='Testcase Id')
+    parser.add_argument('--summary_report_json_file_name', type=str,  help='Name for the json file with summary results in structured format')
     parser.add_argument('--nowait', '-nw', action='store_true', help='Wait before scan ends and get results if set to True. If set to False - just start scan and exit')
 
     args = parser.parse_args()
@@ -68,13 +73,15 @@ def main():
     stingray_url = arguments.stingray_url
     stingray_company = arguments.company_id
     stingray_architecture = arguments.architecture_id
-    stingray_architecture_type = arguments.architecture_type
     stingray_token = arguments.token
-    stingray_profile = arguments.profile
-    stingray_testcase_id = arguments.testcase
-    stingray_json_file_name = arguments.report_json_file_name
+    stingray_profile = arguments.profile_id
+    stingray_testcase_id = arguments.testcase_id
+    stingray_summary_file_name = arguments.summary_report_json_file_name
     distribution_system = arguments.distribution_system
     not_wait_scan_end = arguments.nowait
+
+    stingray_url = stingray_url if stingray_url.endswith('/') else f'{stingray_url}/'
+    stingray_url = stingray_url if stingray_url.endswith('rest/') else f'{stingray_url}rest'
 
     apk_file = ''
     if distribution_system == 'file':
@@ -95,12 +102,19 @@ def main():
 
 
     stingray = Stingray(stingray_url, stingray_token, stingray_company)
+    get_architecture = stingray.get_architectures()
+    if not get_architecture.status_code == 200:
+        Log.error(f'Error while getting architectures')
+        sys.exit(1)
+
+    architectures = get_architecture.json()
+    stingray_architecture_type = next(arch for arch in architectures if arch.get('id', '') == stingray_architecture)
 
     Log.info(f'Start automated scan with test case Id: '
              f'{stingray_testcase_id}, profile Id: {stingray_profile} and file: {apk_file}')
 
     Log.info('Uploading application to server')
-    upload_application_resp = stingray.upload_application(apk_file, stingray_architecture_type)
+    upload_application_resp = stingray.upload_application(apk_file, str(stingray_architecture_type['type']))
     if not upload_application_resp.status_code == 201:
         Log.error(f'Error while uploading application to server: {upload_application_resp.text}')
         sys.exit(1)
@@ -203,8 +217,10 @@ def main():
 
     Log.info(f"Create and download report for scan with id {dast['id']}.")
     report_path = f"./scan-report-{dast['id']}.pdf"
+
     report = stingray.download_report(dast['id'])
     if report.status_code != 200:
+
         Log.error(f"Report creating failed with error {report.text}. Exit...")
         sys.exit(1)
 
@@ -212,19 +228,20 @@ def main():
         f.write(report.content)
     Log.info(f"Report for scan {dast['id']} successfully created and available at path: {report_path}.")
 
-    if stingray_json_file_name:
-        Log.info(f"Create and download JSON report for scan with id {dast['id']} to file {stingray_json_file_name}.")
-        json_report = stingray.get_scan_issues(dast['id'])
-        if json_report.status_code != 200:
-            Log.error(f"JSON report creating failed with error {report.text}. Exit...")
+    if stingray_summary_file_name:
+        Log.info(f"Create and download JSON summary report for scan with id {dast['id']} to file {stingray_summary_file_name}.")
+        json_summary_report = stingray.get_scan_info(dast['id'])
+        if json_summary_report.status_code != 200:
+            Log.error(f"JSON summary report creating failed with error {json_summary_report.text}. Exit...")
             sys.exit(1)
 
-        Log.info(f"Saving json results to file {stingray_json_file_name}.")
-        stingray_json_file = stingray_json_file_name if stingray_json_file_name.endswith('.json') else f'{stingray_json_file_name}.json'
+        Log.info(f"Saving summary json results to file {stingray_summary_file_name}.")
+        stingray_json_file = stingray_summary_file_name if stingray_summary_file_name.endswith(
+            '.json') else f'{stingray_summary_file_name}.json'
         with open(stingray_json_file, 'w') as fp:
-            json.dump(json_report, fp, indent=4)
+            json.dump(json_summary_report.json(), fp, indent=4)
 
-    Log.info(f"JSON report for scan {dast['id']} successfully created and available at path: {json_report}.")
+        Log.info(f"JSON report for scan {dast['id']} successfully created and available at path: {stingray_json_file}.")
 
     Log.info('Job completed successfully')
 
